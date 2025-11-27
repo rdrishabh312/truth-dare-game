@@ -34,6 +34,7 @@ const GameBoard = ({ gameData, onExit }) => {
     const [showChoice, setShowChoice] = useState(false);
     const [currentQuestion, setCurrentQuestion] = useState(null);
     const [currentBottleIndex, setCurrentBottleIndex] = useState(0);
+    const [selectionHistory, setSelectionHistory] = useState([]); // Track last 2 selections
 
     // Calculate which player the bottle points to based on rotation
     const getPlayerFromRotation = (degrees) => {
@@ -68,13 +69,51 @@ const GameBoard = ({ gameData, onExit }) => {
 
         // 5-10 full rotations (1800-3600 deg) + random offset
         const spins = 1800 + Math.random() * 1800;
-        const newRotation = rotation + spins;
+        let newRotation = rotation + spins;
         setRotation(newRotation);
-
         // Duration matches CSS transition (5s)
         setTimeout(() => {
             setIsSpinning(false);
-            const playerIndex = getPlayerFromRotation(newRotation);
+            let playerIndex = getPlayerFromRotation(newRotation);
+
+            // Fairness check: prevent same player more than twice consecutively
+            // Only apply if we have at least 3 players and there's selection history
+            const playerCount = gameData.players.length;
+            if (playerCount >= 3 && selectionHistory.length >= 2) {
+                // Check if the last 2 selections were the same player
+                const lastTwo = selectionHistory.slice(-2);
+                if (lastTwo[0] === lastTwo[1] && lastTwo[1] === playerIndex) {
+                    // Same player selected 3 times in a row - reselect a different player
+                    const degreesPerPlayer = 360 / playerCount;
+
+                    // Find a different player
+                    let attempts = 0;
+                    let alternativeIndex;
+                    do {
+                        // Add random offset to select a different player
+                        const randomOffset = (Math.floor(Math.random() * (playerCount - 1)) + 1) * degreesPerPlayer;
+                        const adjustedRotation = newRotation + randomOffset;
+                        alternativeIndex = getPlayerFromRotation(adjustedRotation);
+                        attempts++;
+                    } while (alternativeIndex === playerIndex && attempts < 10);
+
+                    // Update to the alternative player
+                    if (alternativeIndex !== playerIndex) {
+                        playerIndex = alternativeIndex;
+                        // Adjust rotation to match the new player
+                        const degreesPerPlayer = 360 / playerCount;
+                        const targetDegree = playerIndex * degreesPerPlayer + (degreesPerPlayer / 2);
+                        const currentNormalized = newRotation % 360;
+                        const diff = targetDegree - currentNormalized;
+                        newRotation = newRotation + diff;
+                        setRotation(newRotation);
+                    }
+                }
+            }
+
+            // Update selection history (keep only last 2)
+            setSelectionHistory(prev => [...prev.slice(-1), playerIndex]);
+
             setSelectedPlayerIndex(playerIndex);
             setSelectedPlayer(gameData.players[playerIndex]);
             setShowChoice(true);
@@ -326,7 +365,11 @@ const GameBoard = ({ gameData, onExit }) => {
                     zIndex: 100, padding: '20px', backdropFilter: 'blur(15px)'
                 }}>
                     <button
-                        onClick={() => setShowChoice(false)}
+                        onClick={() => {
+                            setShowChoice(false);
+                            setSelectedPlayer(null);
+                            setSelectedPlayerIndex(null);
+                        }}
                         style={{ position: 'absolute', top: '20px', right: '20px', background: 'transparent', color: 'white', padding: '10px', fontSize: '1.5rem', border: 'none', cursor: 'pointer' }}
                     >
                         ✕
