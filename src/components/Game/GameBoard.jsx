@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import QuestionCard from './QuestionCard';
 import { QUESTIONS } from '../../questions';
@@ -26,6 +26,16 @@ const PLAYER_COLORS = [
     '#FFAAA5', // Salmon
 ];
 
+// Fisher-Yates shuffle algorithm for randomizing arrays
+const shuffleArray = (array) => {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+};
+
 const GameBoard = ({ gameData, onExit }) => {
     const [rotation, setRotation] = useState(0);
     const [isSpinning, setIsSpinning] = useState(false);
@@ -35,6 +45,48 @@ const GameBoard = ({ gameData, onExit }) => {
     const [currentQuestion, setCurrentQuestion] = useState(null);
     const [currentBottleIndex, setCurrentBottleIndex] = useState(0);
     const [selectionHistory, setSelectionHistory] = useState([]); // Track last 2 selections
+
+    // Question pool management - shuffled arrays and current indices
+    const [shuffledTruths, setShuffledTruths] = useState([]);
+    const [shuffledDares, setShuffledDares] = useState([]);
+    const [truthIndex, setTruthIndex] = useState(0);
+    const [dareIndex, setDareIndex] = useState(0);
+
+    // Initialize shuffled question pools on component mount
+    useEffect(() => {
+        const initializeQuestions = () => {
+            let truthPool = [];
+            let darePool = [];
+
+            // Add default questions if mixWithDefault is enabled
+            if (gameData.mixWithDefault) {
+                const category = gameData.category || 'Teen';
+                truthPool = [...QUESTIONS[category].truth];
+                darePool = [...QUESTIONS[category].dare];
+            }
+
+            // Add custom questions
+            truthPool = [...truthPool, ...gameData.customQuestions.truths];
+            darePool = [...darePool, ...gameData.customQuestions.dares];
+
+            // Ensure we have at least one question in each pool
+            if (truthPool.length === 0) {
+                truthPool = ["No truth questions available! Add some custom ones."];
+            }
+            if (darePool.length === 0) {
+                darePool = ["No dare questions available! Add some custom ones."];
+            }
+
+            // Shuffle both pools
+            setShuffledTruths(shuffleArray(truthPool));
+            setShuffledDares(shuffleArray(darePool));
+            setTruthIndex(0);
+            setDareIndex(0);
+        };
+
+        initializeQuestions();
+    }, [gameData]);
+
 
     // Calculate which player the bottle points to based on rotation
     const getPlayerFromRotation = (degrees) => {
@@ -132,24 +184,34 @@ const GameBoard = ({ gameData, onExit }) => {
             selectedType = Math.random() > 0.5 ? 'TRUTH' : 'DARE';
         }
 
-        let pool = [];
-        if (gameData.mixWithDefault) {
-            const category = gameData.category || 'Teen';
-            pool = [...QUESTIONS[category][selectedType.toLowerCase()]];
-        }
-
+        let question;
         if (selectedType === 'TRUTH') {
-            pool = [...pool, ...gameData.customQuestions.truths];
+            // Get next truth question from shuffled pool
+            if (truthIndex >= shuffledTruths.length) {
+                // Reshuffle if we've exhausted all questions
+                const newShuffled = shuffleArray(shuffledTruths);
+                setShuffledTruths(newShuffled);
+                setTruthIndex(0);
+                question = newShuffled[0];
+            } else {
+                question = shuffledTruths[truthIndex];
+            }
+            setTruthIndex(prev => prev + 1);
         } else {
-            pool = [...pool, ...gameData.customQuestions.dares];
+            // Get next dare question from shuffled pool
+            if (dareIndex >= shuffledDares.length) {
+                // Reshuffle if we've exhausted all questions
+                const newShuffled = shuffleArray(shuffledDares);
+                setShuffledDares(newShuffled);
+                setDareIndex(0);
+                question = newShuffled[0];
+            } else {
+                question = shuffledDares[dareIndex];
+            }
+            setDareIndex(prev => prev + 1);
         }
 
-        if (pool.length === 0) {
-            pool = ["No questions available! Add some custom ones."];
-        }
-
-        const randomQ = pool[Math.floor(Math.random() * pool.length)];
-        setCurrentQuestion({ type: selectedType, text: randomQ });
+        setCurrentQuestion({ type: selectedType, text: question });
     };
 
     const handleDone = () => {
