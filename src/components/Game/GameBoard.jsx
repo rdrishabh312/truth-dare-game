@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import QuestionCard from './QuestionCard';
-import { QUESTIONS } from '../../questions';
+import { QUESTIONS_EN, QUESTIONS_HI } from '../../questions';
 import bottleDefault from '../../assets/bottle.png';
 import bottleText1 from '../../assets/bottle_text1.png';
 import bottleText2 from '../../assets/bottle_text2.png';
@@ -61,6 +61,11 @@ const GameBoard = ({ gameData, onExit }) => {
             // Add default questions if mixWithDefault is enabled
             if (gameData.mixWithDefault) {
                 const category = gameData.category || 'Teen';
+                const language = gameData.language || 'Hinglish';
+
+                // Select appropriate question set based on language
+                const QUESTIONS = language === 'English' ? QUESTIONS_EN : QUESTIONS_HI;
+
                 truthPool = [...QUESTIONS[category].truth];
                 darePool = [...QUESTIONS[category].dare];
             }
